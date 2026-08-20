@@ -7,12 +7,24 @@ Takes the raw parsed DataFrame from data.py and produces:
 - cyclical seasonal encoding
 - lag and rolling features per station
 - multi-step-ahead targets for direct forecasting
+
+Note: RENAME_MAP, TENTHS_COLUMNS, and HOUR_OF_OCCURRENCE_COLUMNS stay here
+rather than in config.py — they're a fixed fact about KNMI's schema, not a
+tunable setting. Everything that's actually configurable (target
+variables, horizon, lag/rolling windows) comes from config.py.
 """
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+
+from knmi_weather_forecast.config import (
+    FORECAST_HORIZON,
+    LAG_DAYS,
+    ROLLING_WINDOWS,
+    TARGET_VARS,
+)
 
 # KNMI daily variable codes -> readable names.
 # Not exhaustive of every possible column, but covers the common ones.
@@ -64,38 +76,26 @@ TENTHS_COLUMNS = [
     "pressure_mean", "pressure_max", "pressure_min", "evapotranspiration",
 ]
 
-# Core variables we'll build multi-step forecast targets for
-TARGET_VARS = ["temp_mean", "precip_sum", "wind_speed_mean"]
-
-FORECAST_HORIZON = 7  # days ahead
-
 
 def clean_and_rename(df: pd.DataFrame) -> pd.DataFrame:
     """Rename known columns, drop fully-empty columns, fix units."""
     df = df.copy()
 
-    # Only rename columns we recognize; leave unknown ones as-is
     rename_cols = {k: v for k, v in RENAME_MAP.items() if k in df.columns}
     df = df.rename(columns=rename_cols)
 
-    # Drop hour-of-occurrence metadata columns (timing, not measurements)
     drop_cols = [c for c in HOUR_OF_OCCURRENCE_COLUMNS if c in df.columns]
     if drop_cols:
         df = df.drop(columns=drop_cols)
 
-    # Drop columns that are NaN for every single row (truly never measured
-    # across all stations in this pull) — keeps the frame from bloating
-    # with columns that carry zero information.
     fully_empty = [c for c in df.columns if df[c].isna().all()]
     if fully_empty:
         df = df.drop(columns=fully_empty)
 
-    # RH/RHX use -1 to mean "measurable but < 0.05mm" — treat as 0
     for col in ["precip_sum", "precip_max_hourly"]:
         if col in df.columns:
             df[col] = df[col].replace(-1, 0)
 
-    # Convert tenths columns to real units
     for col in TENTHS_COLUMNS:
         if col in df.columns:
             df[col] = df[col] / 10.0
@@ -115,8 +115,8 @@ def add_seasonal_features(df: pd.DataFrame) -> pd.DataFrame:
 def add_lag_and_rolling_features(
     df: pd.DataFrame,
     columns: list[str] | None = None,
-    lags: tuple[int, ...] = (1, 2, 3, 7),
-    rolling_windows: tuple[int, ...] = (3, 7, 14),
+    lags: tuple[int, ...] = LAG_DAYS,
+    rolling_windows: tuple[int, ...] = ROLLING_WINDOWS,
 ) -> pd.DataFrame:
     """
     Add lag and rolling-mean features per station, for the given columns.
@@ -180,9 +180,10 @@ def build_feature_set(raw_df: pd.DataFrame) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    from knmi_weather_forecast.data import fetch_daily_data
+    from knmi_weather_forecast.config import TRAIN_START_DATE
+    from knmi_weather_forecast.data import load_or_fetch_daily_data
 
-    raw = fetch_daily_data(start="20240101")
+    raw = load_or_fetch_daily_data(start=TRAIN_START_DATE)
     features = build_feature_set(raw)
     print(features.shape)
     print(features.columns.tolist())

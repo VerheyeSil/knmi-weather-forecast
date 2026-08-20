@@ -5,34 +5,38 @@ Strategy:
 - One model per (target variable, horizon step) pair, e.g. temp_mean +3 days.
 - Each model is shared across all stations, with 'station' as an input feature.
 - Chronological train/test split (never random split for time series data).
+
+Feature consistency: the exact feature column list and a median imputer are
+fit once at training time and saved alongside the models. Prediction reuses
+this saved pipeline rather than recomputing feature columns from whatever
+data happens to be available at inference time — different fetches (years
+of training data vs. a short inference snapshot) can have different columns
+fully populated, so recomputing independently causes mismatches.
 """
 
 from __future__ import annotations
-
-from pathlib import Path
 
 import joblib
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-from knmi_weather_forecast.features import TARGET_VARS, FORECAST_HORIZON
+from knmi_weather_forecast.config import (
+    FEATURE_PIPELINE_PATH,
+    FORECAST_HORIZON,
+    MODELS_DIR,
+    RANDOM_FOREST_PARAMS,
+    TARGET_VARS,
+    TEST_FRACTION,
+)
 
-MODELS_DIR = Path(__file__).resolve().parents[2] / "models"
-
-# Columns that should never be used as input features (identifiers, raw
-# date fields, or target columns for any horizon/variable — those would
-# leak information about the future into the model).
 NON_FEATURE_PREFIXES = ("target_",)
 NON_FEATURE_COLUMNS = {"date", "date_int"}
 
 
 def get_feature_columns(df: pd.DataFrame) -> list[str]:
-    """
-    All numeric columns except identifiers/dates and any target_* column.
-    'station' is intentionally kept as a feature.
-    """
     feature_cols = []
     for col in df.columns:
         if col in NON_FEATURE_COLUMNS:
@@ -46,13 +50,8 @@ def get_feature_columns(df: pd.DataFrame) -> list[str]:
 
 
 def time_based_split(
-    df: pd.DataFrame, test_fraction: float = 0.2
+    df: pd.DataFrame, test_fraction: float = TEST_FRACTION
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Split chronologically: earliest (1 - test_fraction) of dates -> train,
-    the rest -> test. Never shuffle time series data randomly, since that
-    leaks future information into training.
-    """
     cutoff_date = df["date"].quantile(1 - test_fraction, interpolation="nearest")
     train = df[df["date"] <= cutoff_date]
     test = df[df["date"] > cutoff_date]
@@ -62,7 +61,6 @@ def time_based_split(
 def prepare_xy(
     df: pd.DataFrame, target_col: str, feature_cols: list[str]
 ) -> tuple[pd.DataFrame, pd.Series]:
-    """Drop rows with missing target or missing features, return X, y."""
     subset = df[feature_cols + [target_col]].dropna()
     X = subset[feature_cols]
     y = subset[target_col]
@@ -73,21 +71,14 @@ def train_single_model(
     df: pd.DataFrame,
     target_col: str,
     feature_cols: list[str],
-    test_fraction: float = 0.2,
+    test_fraction: float = TEST_FRACTION,
 ) -> tuple[RandomForestRegressor, dict]:
-    """Train and evaluate one model for one target column."""
     train_df, test_df = time_based_split(df, test_fraction)
 
     X_train, y_train = prepare_xy(train_df, target_col, feature_cols)
     X_test, y_test = prepare_xy(test_df, target_col, feature_cols)
 
-    model = RandomForestRegressor(
-        n_estimators=200,
-        max_depth=12,
-        min_samples_leaf=5,
-        n_jobs=-1,
-        random_state=42,
-    )
+    model = RandomForestRegressor(**RANDOM_FOREST_PARAMS)
     model.fit(X_train, y_train)
 
     preds = model.predict(X_test)
@@ -107,11 +98,6 @@ def train_all_models(
     horizon: int = FORECAST_HORIZON,
     save: bool = True,
 ) -> dict[tuple[str, int], dict]:
-    """
-    Train one model per (target_var, horizon_step) combination.
-    Returns a dict of {(var, step): metrics}, and optionally saves each
-    model to disk under models/{var}_+{step}.joblib
-    """
     if target_vars is None:
         target_vars = TARGET_VARS
 
@@ -120,6 +106,14 @@ def train_all_models(
 
     if save:
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+        imputer = SimpleImputer(strategy="median")
+        imputer.fit(df[feature_cols])
+        joblib.dump(
+            {"feature_columns": feature_cols, "imputer": imputer},
+            FEATURE_PIPELINE_PATH,
+        )
+        print(f"Saved feature pipeline ({len(feature_cols)} columns) to {FEATURE_PIPELINE_PATH}")
 
     for var in target_vars:
         for step in range(1, horizon + 1):
@@ -144,18 +138,40 @@ def train_all_models(
 
 
 def load_model(var: str, step: int) -> RandomForestRegressor:
-    """Load a previously trained model for a given variable and horizon step."""
     model_path = MODELS_DIR / f"{var}_+{step}.joblib"
     if not model_path.exists():
         raise FileNotFoundError(f"No trained model found at {model_path}")
     return joblib.load(model_path)
 
 
+def load_feature_pipeline() -> tuple[list[str], SimpleImputer]:
+    if not FEATURE_PIPELINE_PATH.exists():
+        raise FileNotFoundError(
+            f"No feature pipeline found at {FEATURE_PIPELINE_PATH}. "
+            "Run models.py to train (and save) models first."
+        )
+    pipeline = joblib.load(FEATURE_PIPELINE_PATH)
+    return pipeline["feature_columns"], pipeline["imputer"]
+
+
+def prepare_inference_features(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Align an arbitrary DataFrame's features to exactly match what the
+    models were trained on: same columns, same order, missing columns
+    filled via the training-time imputer instead of erroring.
+    """
+    feature_cols, imputer = load_feature_pipeline()
+    aligned = df.reindex(columns=feature_cols)
+    imputed_values = imputer.transform(aligned)
+    return pd.DataFrame(imputed_values, columns=feature_cols, index=df.index)
+
+
 if __name__ == "__main__":
-    from knmi_weather_forecast.data import fetch_daily_data
+    from knmi_weather_forecast.config import TRAIN_START_DATE
+    from knmi_weather_forecast.data import load_or_fetch_daily_data
     from knmi_weather_forecast.features import build_feature_set
 
-    raw = fetch_daily_data(start="20240101")
+    raw = load_or_fetch_daily_data(start=TRAIN_START_DATE)
     features = build_feature_set(raw)
 
     results = train_all_models(features)
