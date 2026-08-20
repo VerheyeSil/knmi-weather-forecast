@@ -46,8 +46,12 @@ DEFAULT_FETCH_START = "20200101"
 # ---------------------------------------------------------------------------
 TARGET_VAR_RAW_CODES = {
     "temp_mean": "TG",
+    "temp_min": "TN",
+    "temp_max": "TX",
     "precip_sum": "RH",
+    "precip_duration": "DR",
     "wind_speed_mean": "FG",
+    "wind_dir_vec": "DDVEC",
 }
 TARGET_VARS = list(TARGET_VAR_RAW_CODES.keys())
 
