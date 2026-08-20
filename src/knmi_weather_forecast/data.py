@@ -117,6 +117,19 @@ def _parse_daily_response(raw_text: str) -> pd.DataFrame:
 
     df.columns = [c.strip() for c in df.columns]
 
+    # Force proper numeric dtypes. Very recent days can have sparse or
+    # oddly-whitespaced fields (data not yet finalized by KNMI), which
+    # pandas can misread as object dtype instead of numeric-with-NaN. If
+    # that ever slips through uncorrected and gets concatenated with
+    # properly-typed cached data, pandas upcasts the whole column to
+    # object to reconcile the mismatch — silently breaking every
+    # downstream numeric check. Coercing here, on every parse, prevents
+    # that regardless of how a given day's raw text happens to look.
+    for col in df.columns:
+        if col in ("date",):
+            continue
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
     if "YYYYMMDD" in df.columns:
         df["date"] = pd.to_datetime(df["YYYYMMDD"], format="%Y%m%d")
 
