@@ -10,10 +10,14 @@ Requires the 'api' optional dependency group:
 
 from __future__ import annotations
 
+import time
+
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from knmi_weather_forecast.api.cache import TTLCache
+from knmi_weather_forecast.config import FORECAST_CACHE_TTL_SECONDS, STATIONS_CACHE_TTL_SECONDS
 from knmi_weather_forecast.data import fetch_station_metadata
 from knmi_weather_forecast.predict import predict_forecast
 
@@ -32,11 +36,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_forecast_cache: TTLCache[pd.DataFrame] = TTLCache(ttl_seconds=FORECAST_CACHE_TTL_SECONDS)
+_stations_cache: TTLCache[pd.DataFrame] = TTLCache(ttl_seconds=STATIONS_CACHE_TTL_SECONDS)
+
 
 def _dataframe_to_records(df: pd.DataFrame) -> list[dict]:
     """Convert a DataFrame to JSON-safe records (NaN -> None)."""
     clean = df.astype(object).where(pd.notnull(df), None)
     return clean.to_dict(orient="records")
+
+
+def _cache_age_seconds(cache: TTLCache) -> float | None:
+    if cache.computed_at is None:
+        return None
+    return round(time.monotonic() - cache.computed_at, 1)
 
 
 @app.get("/health")
@@ -45,32 +58,46 @@ def health() -> dict:
 
 
 @app.get("/stations")
-def get_stations() -> list[dict]:
+def get_stations() -> dict:
     """Return station metadata (id, name, lat, lon, altitude) for all KNMI stations."""
-    stations_df = fetch_station_metadata()
-    return _dataframe_to_records(stations_df)
+    stations_df = _stations_cache.get(fetch_station_metadata)
+    return {
+        "cache_age_seconds": _cache_age_seconds(_stations_cache),
+        "stations": _dataframe_to_records(stations_df),
+    }
 
 
 @app.get("/forecast")
-def get_forecast() -> list[dict]:
+def get_forecast() -> dict:
     """
     Return the current 7-day forecast (temperature, precipitation, wind)
     for every KNMI station with sufficient historical data reliability.
 
-    Note: this recomputes the forecast on every request (fetches recent
-    KNMI data + runs all models fresh). Fine for development; once this
-    is under real traffic, add caching (e.g. compute once per hour) so
-    repeated requests don't each trigger a fresh KNMI fetch.
+    Cached for FORECAST_CACHE_TTL_SECONDS — repeated requests within that
+    window return the same cached result instead of recomputing.
     """
-    forecast_df = predict_forecast()
-    return _dataframe_to_records(forecast_df)
+    forecast_df = _forecast_cache.get(predict_forecast)
+    return {
+        "cache_age_seconds": _cache_age_seconds(_forecast_cache),
+        "forecast": _dataframe_to_records(forecast_df),
+    }
 
 
 @app.get("/forecast/{station_id}")
 def get_station_forecast(station_id: int) -> dict:
     """Return the 7-day forecast for a single station by its KNMI station ID."""
-    forecast_df = predict_forecast()
+    forecast_df = _forecast_cache.get(predict_forecast)
     station_row = forecast_df[forecast_df["station"] == station_id]
     if station_row.empty:
         raise HTTPException(status_code=404, detail=f"Station {station_id} not found")
-    return _dataframe_to_records(station_row)[0]
+    return {
+        "cache_age_seconds": _cache_age_seconds(_forecast_cache),
+        **_dataframe_to_records(station_row)[0],
+    }
+
+
+@app.post("/forecast/refresh")
+def refresh_forecast() -> dict:
+    """Force the next /forecast request to recompute rather than use the cache."""
+    _forecast_cache.invalidate()
+    return {"status": "cache invalidated"}
