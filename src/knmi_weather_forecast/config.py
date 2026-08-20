@@ -84,3 +84,13 @@ COVERAGE_THRESHOLD = 0.90
 # Rolling/lag features need history before the "current" day, so pull
 # enough trailing days to fill the largest rolling window plus a margin.
 PREDICT_LOOKBACK_DAYS = 30
+
+# ---------------------------------------------------------------------------
+# API caching
+# ---------------------------------------------------------------------------
+# KNMI publishes daily data once a day, so recomputing the forecast more
+# often than this just wastes time and hits KNMI's servers for no benefit.
+FORECAST_CACHE_TTL_SECONDS = 60 * 60  # 1 hour
+
+# Station metadata (name/lat/lon) essentially never changes.
+STATIONS_CACHE_TTL_SECONDS = 60 * 60 * 24  # 24 hours
