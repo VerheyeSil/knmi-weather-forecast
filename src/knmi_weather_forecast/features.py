@@ -35,6 +35,7 @@ RENAME_MAP = {
     "Q": "global_radiation",         # J/cm^2
     "DR": "precip_duration",         # 0.1 hour
     "RH": "precip_sum",              # 0.1 mm (note: -1 means <0.05mm, handled below)
+    "RHX": "precip_max_hourly",      # 0.1 mm (note: -1 means <0.05mm, handled below)
     "PG": "pressure_mean",           # 0.1 hPa
     "PX": "pressure_max",            # 0.1 hPa
     "PN": "pressure_min",            # 0.1 hPa
@@ -47,11 +48,19 @@ RENAME_MAP = {
     "EV24": "evapotranspiration",    # 0.1 mm
 }
 
+# "Hour of occurrence" metadata columns (e.g. hour the day's max temp happened).
+# These are timing metadata, not measurements — drop them to keep the
+# feature set focused on values a daily forecast model can actually use.
+HOUR_OF_OCCURRENCE_COLUMNS = [
+    "FHXH", "FHNH", "FXXH", "TNH", "TXH", "T10NH",
+    "RHXH", "PXH", "PNH", "VVNH", "VVXH", "UXH", "UNH",
+]
+
 # Columns stored in tenths that need /10 to get real units
 TENTHS_COLUMNS = [
     "wind_speed_vec", "wind_speed_mean", "wind_speed_max_hourly", "wind_speed_min_hourly",
     "wind_gust_max", "temp_mean", "temp_min", "temp_max", "temp_min_10cm",
-    "sunshine_duration", "precip_duration", "precip_sum",
+    "sunshine_duration", "precip_duration", "precip_sum", "precip_max_hourly",
     "pressure_mean", "pressure_max", "pressure_min", "evapotranspiration",
 ]
 
@@ -69,6 +78,11 @@ def clean_and_rename(df: pd.DataFrame) -> pd.DataFrame:
     rename_cols = {k: v for k, v in RENAME_MAP.items() if k in df.columns}
     df = df.rename(columns=rename_cols)
 
+    # Drop hour-of-occurrence metadata columns (timing, not measurements)
+    drop_cols = [c for c in HOUR_OF_OCCURRENCE_COLUMNS if c in df.columns]
+    if drop_cols:
+        df = df.drop(columns=drop_cols)
+
     # Drop columns that are NaN for every single row (truly never measured
     # across all stations in this pull) — keeps the frame from bloating
     # with columns that carry zero information.
@@ -76,9 +90,10 @@ def clean_and_rename(df: pd.DataFrame) -> pd.DataFrame:
     if fully_empty:
         df = df.drop(columns=fully_empty)
 
-    # RH (precip_sum) uses -1 to mean "measurable but < 0.05mm" — treat as 0
-    if "precip_sum" in df.columns:
-        df["precip_sum"] = df["precip_sum"].replace(-1, 0)
+    # RH/RHX use -1 to mean "measurable but < 0.05mm" — treat as 0
+    for col in ["precip_sum", "precip_max_hourly"]:
+        if col in df.columns:
+            df[col] = df[col].replace(-1, 0)
 
     # Convert tenths columns to real units
     for col in TENTHS_COLUMNS:
