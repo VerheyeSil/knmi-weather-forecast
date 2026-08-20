@@ -11,3 +11,6 @@ data/processed/*
 .env
 .env.*
 .DS_Store
+
+# Trained model artifacts
+models/
