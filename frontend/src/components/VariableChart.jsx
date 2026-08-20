@@ -1,60 +1,60 @@
-const CHART_WIDTH = 320;
+const CHART_WIDTH = 640;
 const CHART_HEIGHT = 130;
-const PAD_X = 24;
+const PAD_X = 32;
 const PAD_TOP = 26;
 const PAD_BOTTOM = 26;
 
-/**
- * A small self-contained chart for one forecast variable. Receives fully
- * resolved values + labels rather than computing dates itself, so it has
- * no opinion about "today" or data lag — just renders whatever real
- * future days it's given.
- *
- * type="line" for continuous quantities (temperature), type="bar" for
- * daily totals (precipitation, wind).
- *
- * Optional unit toggle: pass `unitOptions` (array of unit label strings),
- * `activeUnitIndex`, and `onToggleUnit` to render the unit as a clickable
- * button that cycles through them (used for wind's m/s <-> Bft toggle).
- * Omit these and the unit renders as static text, as before.
- */
+const COMPASS_POINTS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+
+function degreesToCompass(deg) {
+  if (deg == null) return "";
+  const idx = Math.round(deg / 45) % 8;
+  return COMPASS_POINTS[idx];
+}
+
 export default function VariableChart({
   label,
   unit,
   color,
   type = "line",
-  values, // array of numbers or null, one per forecast day
-  labels, // array of { weekday, day } matching values, same length
+  values,
+  minValues,
+  maxValues,
+  directionValues,
+  labels,
   formatValue = (v) => Math.round(v),
   unitOptions,
   activeUnitIndex,
   onToggleUnit,
+  fullWidth = false,
 }) {
   const hasData = values.some((v) => v != null);
+
   const plotWidth = CHART_WIDTH - PAD_X * 2;
   const plotHeight = CHART_HEIGHT - PAD_TOP - PAD_BOTTOM;
   const stepX = plotWidth / (values.length - 1 || 1);
 
   const unitControl =
     unitOptions && unitOptions.length > 1 ? (
-        <button
+      <button
         type="button"
-        className={`variable-chart-unit-toggle ${
-            activeUnitIndex === 1 ? "is-secondary" : ""
-        }`}
+        className={`variable-chart-unit-toggle ${activeUnitIndex === 1 ? "is-secondary" : ""}`}
         onClick={onToggleUnit}
         aria-label={`Switch unit (currently ${unitOptions[activeUnitIndex]})`}
-        >
-        <span className="unit-toggle-option">Bft</span>
-        <span className="unit-toggle-option">m/s</span>
-        </button>
+      >
+        {unitOptions.map((opt) => (
+          <span className="unit-toggle-option" key={opt}>
+            {opt}
+          </span>
+        ))}
+      </button>
     ) : (
-        <span className="variable-chart-unit">{unit}</span>
+      <span className="variable-chart-unit">{unit}</span>
     );
 
   if (!hasData) {
     return (
-      <div className="variable-chart variable-chart--empty">
+      <div className={`variable-chart variable-chart--empty ${fullWidth ? "variable-chart--full" : ""}`}>
         <div className="variable-chart-label">
           {label} {unitControl}
         </div>
@@ -63,21 +63,62 @@ export default function VariableChart({
     );
   }
 
-  const numericValues = values.filter((v) => v != null);
+  if (type === "wind-combo") {
+    const dayPoints = values.map((v, i) => ({
+      x: PAD_X + i * stepX,
+      speed: v,
+      dir: directionValues ? directionValues[i] : null,
+      label: labels[i],
+    }));
+
+    return (
+      <div className={`variable-chart ${fullWidth ? "variable-chart--full" : ""}`}>
+        <div className="variable-chart-label">
+          {label} {unitControl}
+        </div>
+        <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="variable-chart-svg">
+          {dayPoints.map((p, i) => (
+            <g key={i}>
+              {p.speed != null && (
+                <text x={p.x} y={16} textAnchor="middle" className="variable-chart-value">
+                  {formatValue(p.speed)}
+                </text>
+              )}
+              {renderWindNeedle(p.x, 62, p.dir, color, `wind-${i}`)}
+              {p.dir != null && (
+                <text x={p.x} y={92} textAnchor="middle" className="variable-chart-direction-value">
+                  {degreesToCompass(p.dir)}
+                </text>
+              )}
+              <text x={p.x} y={CHART_HEIGHT - 16} textAnchor="middle" className="variable-chart-day">
+                {p.label.weekday}
+              </text>
+              <text x={p.x} y={CHART_HEIGHT - 5} textAnchor="middle" className="variable-chart-date">
+                {p.label.day}
+              </text>
+            </g>
+          ))}
+        </svg>
+      </div>
+    );
+  }
+
+  const numericValues = [
+    ...values,
+    ...(type === "line" ? minValues || [] : []),
+    ...(type === "line" ? maxValues || [] : []),
+  ].filter((v) => v != null);
+
   const minV = Math.min(...numericValues);
   const maxV = Math.max(...numericValues);
   const span = maxV - minV || 1;
 
+  const padded = type === "line" ? span * 0.15 : 0;
+  const scaleMin = type === "line" ? minV - padded : 0;
+  const scaleMax = type === "line" ? maxV + padded : Math.max(maxV, 1);
+
   const yFor = (v) => {
-    if (type === "line") {
-      const padded = span * 0.35;
-      const lo = minV - padded;
-      const hi = maxV + padded;
-      const f = (v - lo) / (hi - lo || 1);
-      return PAD_TOP + plotHeight - f * plotHeight;
-    }
-    const hi = Math.max(maxV, 1);
-    const f = v / hi;
+    const f = (v - scaleMin) / (scaleMax - scaleMin || 1);
     return PAD_TOP + plotHeight - f * plotHeight;
   };
 
@@ -88,6 +129,26 @@ export default function VariableChart({
     label: labels[i],
   }));
 
+  const rangePoints =
+    type === "line" && minValues && maxValues
+      ? values.map((_, i) => ({
+          x: PAD_X + i * stepX,
+          minY: minValues[i] != null ? yFor(minValues[i]) : null,
+          maxY: maxValues[i] != null ? yFor(maxValues[i]) : null,
+        }))
+      : [];
+
+  const validRangePoints = rangePoints.filter((p) => p.minY != null && p.maxY != null);
+
+  const rangePath =
+    validRangePoints.length > 0
+      ? [
+          ...validRangePoints.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x},${p.maxY}`),
+          ...[...validRangePoints].reverse().map((p) => `L ${p.x},${p.minY}`),
+          "Z",
+        ].join(" ")
+      : "";
+
   const linePath = points
     .filter((p) => p.y != null)
     .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x},${p.y}`)
@@ -95,15 +156,38 @@ export default function VariableChart({
 
   const baselineY = PAD_TOP + plotHeight;
 
+  const gridCount = 4;
+  const gridValues =
+    type === "line"
+      ? Array.from({ length: gridCount + 1 }, (_, i) => {
+          const value = scaleMin + ((scaleMax - scaleMin) * i) / gridCount;
+          return { value, y: PAD_TOP + plotHeight - (i / gridCount) * plotHeight };
+        })
+      : [];
+
   return (
-    <div className="variable-chart">
+    <div className={`variable-chart ${fullWidth ? "variable-chart--full" : ""}`}>
       <div className="variable-chart-label">
         {label} {unitControl}
       </div>
-      <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="variable-chart-svg">
-        <line x1={PAD_X} x2={CHART_WIDTH - PAD_X} y1={baselineY} y2={baselineY} className="variable-chart-baseline" />
 
-        {type === "line" && <path d={linePath} fill="none" stroke={color} strokeWidth={2} />}
+      <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="variable-chart-svg">
+        {type === "line" &&
+          gridValues.map((grid, i) => (
+            <g key={`grid-${i}`}>
+              <line x1={PAD_X} x2={CHART_WIDTH - PAD_X} y1={grid.y} y2={grid.y} className="variable-chart-grid" />
+              <text x={PAD_X - 6} y={grid.y + 3} textAnchor="end" className="variable-chart-axis-value">
+                {Math.round(grid.value)}°
+              </text>
+            </g>
+          ))}
+
+        {type === "bar" && (
+          <line x1={PAD_X} x2={CHART_WIDTH - PAD_X} y1={baselineY} y2={baselineY} className="variable-chart-baseline" />
+        )}
+
+        {type === "line" && rangePath && <path d={rangePath} fill={color} opacity={0.14} stroke="none" />}
+        {type === "line" && linePath && <path d={linePath} fill="none" stroke={color} strokeWidth={2} />}
 
         {points.map((p, i) => (
           <g key={i}>
@@ -111,11 +195,13 @@ export default function VariableChart({
               <rect x={p.x - 8} y={p.y} width={16} height={baselineY - p.y} fill={color} rx={2} />
             )}
             {type === "line" && p.y != null && <circle cx={p.x} cy={p.y} r={3} fill={color} />}
-            {p.v != null && (
+
+            {type === "bar" && p.v != null && (
               <text x={p.x} y={Math.max(12, p.y - 8)} textAnchor="middle" className="variable-chart-value">
                 {formatValue(p.v)}
               </text>
             )}
+
             <text x={p.x} y={CHART_HEIGHT - 16} textAnchor="middle" className="variable-chart-day">
               {p.label.weekday}
             </text>
@@ -126,5 +212,24 @@ export default function VariableChart({
         ))}
       </svg>
     </div>
+  );
+}
+
+function renderWindNeedle(x, y, degrees, color, key) {
+  if (degrees == null) {
+    return (
+      <text key={key} x={x} y={y + 4} textAnchor="middle" className="variable-chart-day">
+        —
+      </text>
+    );
+  }
+  return (
+    <g key={key}>
+      <circle cx={x} cy={y} r={14} className="wind-dial-ring" />
+      <g transform={`translate(${x} ${y}) rotate(${degrees})`}>
+        <path d="M 0,-14 L 5,8 L 0,4 L -5,8 Z" fill={color} className="wind-dial-needle" />
+      </g>
+      <circle cx={x} cy={y} r={2.5} className="wind-dial-pivot" stroke={color} />
+    </g>
   );
 }

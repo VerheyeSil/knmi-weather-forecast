@@ -14,27 +14,14 @@
   --font-mono: "IBM Plex Mono", monospace;
 }
 
-/* =========================================================
-   Base
-   ========================================================= */
-
 * {
   box-sizing: border-box;
 }
 
-html,
-body,
-#root {
-  width: 100%;
-  min-height: 100%;
-}
-
 body {
   margin: 0;
-
   background: var(--bg-deep);
   color: var(--text-chalk);
-
   font-family: var(--font-body);
 }
 
@@ -44,11 +31,8 @@ body {
 
 .app {
   width: 100%;
-  height: 100vh;
-
+  min-height: 100vh;
   display: flex;
-
-  overflow: visible;
 }
 
 /* =========================================================
@@ -57,16 +41,10 @@ body {
 
 .sidebar {
   flex: 0 0 200px;
-
-  height: 100%;
-
   background: var(--bg-rail);
-
   border-right: 1px solid var(--line-grid);
-
   display: flex;
   flex-direction: column;
-
   transition: flex-basis 0.2s ease;
 }
 
@@ -78,38 +56,26 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   padding: 1.1rem 1rem;
-
   border-bottom: 1px solid var(--line-grid);
 }
 
 .sidebar-title {
   font-family: var(--font-display);
-
   font-weight: 600;
-
   font-size: 0.95rem;
-
   letter-spacing: 0.04em;
 }
 
 .sidebar-toggle {
   background: none;
-
   border: 1px solid var(--line-grid);
-
   color: var(--text-muted);
-
   border-radius: 3px;
-
   width: 22px;
   height: 22px;
-
   font-family: var(--font-mono);
-
   cursor: pointer;
-
   flex-shrink: 0;
 }
 
@@ -121,82 +87,59 @@ body {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-
   padding: 0.75rem 0.5rem;
-
   gap: 0.15rem;
 }
 
 .sidebar-nav-item {
   display: flex;
   align-items: center;
-
   gap: 0.65rem;
-
   background: none;
-
   border: none;
-
   color: var(--text-muted);
-
   font-family: var(--font-body);
-
   font-size: 0.85rem;
-
   text-align: left;
-
   padding: 0.55rem 0.6rem;
-
   border-radius: 4px;
-
   cursor: pointer;
 }
 
 .sidebar-nav-item:hover:not(.is-disabled) {
   background: var(--bg-panel);
-
   color: var(--text-chalk);
 }
 
 .sidebar-nav-item.is-active {
   background: var(--bg-panel);
-
   color: var(--accent-brass);
 }
 
 .sidebar-nav-item.is-disabled {
   cursor: default;
-
   opacity: 0.5;
 }
 
 .sidebar-nav-dot {
   width: 6px;
   height: 6px;
-
   border-radius: 50%;
-
   background: currentColor;
-
   flex-shrink: 0;
 }
 
 .sidebar-nav-label {
   display: flex;
   flex-direction: column;
-
   line-height: 1.3;
 }
 
 .sidebar-nav-soon {
   font-family: var(--font-mono);
-
   font-size: 0.6rem;
-
   font-style: normal;
-
   color: var(--text-muted);
-
   letter-spacing: 0.04em;
 }
 
@@ -206,22 +149,7 @@ body {
 
 .app-main {
   flex: 1;
-
   min-width: 0;
-  min-height: 0;
-
-  height: 100%;
-
-  /*
-   * Header takes its natural height.
-   *
-   * View body gets everything that remains.
-   */
-  display: grid;
-
-  grid-template-rows: auto minmax(0, 1fr);
-
-  overflow-y: auto;
 }
 
 /* =========================================================
@@ -230,62 +158,44 @@ body {
 
 .view-header {
   display: flex;
-
   align-items: baseline;
   justify-content: space-between;
-
   padding: 1.25rem 2rem;
-
   border-bottom: 1px solid var(--line-grid);
 }
 
 .view-header h1 {
   font-family: var(--font-display);
-
   font-weight: 600;
-
   font-size: 1.25rem;
-
   letter-spacing: 0.02em;
-
   margin: 0;
 }
 
 .view-status {
   font-family: var(--font-mono);
-
   font-size: 0.8rem;
-
   color: var(--text-muted);
-
   margin: 0;
 }
 
 /* =========================================================
-   View body
+   View body — map + panel side by side. align-items: stretch
+   makes both automatically the same height, driven by
+   whichever is naturally taller (the panel, since the map's
+   own content has no intrinsic height). No fixed pixel
+   heights anywhere — this adapts automatically as the panel's
+   content grows.
    ========================================================= */
 
 .view-body {
-  /*
-   * This row occupies exactly the remaining height below
-   * the header.
-   */
-  min-height: 0;
-
   width: 100%;
-
+  max-width: 1800px;
+  margin: 0 auto;
   display: flex;
-
   align-items: stretch;
-
   gap: 1.5rem;
-
   padding: 1.5rem 2rem;
-
-  /*
-   * Prevent the body itself from creating another scrollbar.
-   */
-  overflow: hidden;
 }
 
 /* =========================================================
@@ -293,29 +203,13 @@ body {
    ========================================================= */
 
 .map-wrapper {
-  /*
-   * The wrapper is the actual layout element.
-   *
-   * It receives the height from .view-body.
-   */
-  flex: 1 1 560px;
-
-  max-width: 640px;
-
+  flex: 0 0 calc((100% - 1.5rem) / 2);
   min-width: 0;
   min-height: 0;
-
   display: flex;
-
-  /*
-   * This makes the Leaflet map fill the wrapper.
-   */
   overflow: hidden;
-
   border: 1px solid var(--line-grid);
-
   border-radius: 4px;
-
   background: var(--bg-panel);
 }
 
@@ -324,39 +218,31 @@ body {
    ========================================================= */
 
 .leaflet-map {
-  /*
-   * Leaflet fills the entire wrapper.
-   */
   width: 100%;
   height: 100%;
-
   flex: 1 1 auto;
-
   min-width: 0;
   min-height: 0;
-
   border: none;
-
   border-radius: 0;
 }
 
 .leaflet-container {
   width: 100%;
   height: 100%;
-
   background: var(--bg-panel);
 }
 
 .leaflet-tooltip {
   background: var(--bg-panel);
-
   color: var(--text-chalk);
-
   border: 1px solid var(--line-grid);
-
   font-family: var(--font-mono);
-
   font-size: 0.75rem;
+}
+
+.leaflet-tooltip::before {
+  border-top-color: var(--line-grid);
 }
 
 /* =========================================================
@@ -364,78 +250,44 @@ body {
    ========================================================= */
 
 .station-panel {
-  /*
-   * Same flex row as the map wrapper.
-   *
-   * align-items: stretch on .view-body means this card
-   * automatically receives exactly the same height.
-   */
-  flex: 1 1 340px;
-
-  max-width: 420px;
-
+  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
-
   background: var(--bg-panel);
-
   border: 1px solid var(--line-grid);
-
   border-radius: 4px;
-
   padding: 1.25rem 1.5rem;
-
-  /*
-   * The card itself scrolls if there are more charts than
-   * can fit in the available viewport height.
-   */
-  overflow-y: auto;
 }
 
 .station-panel--empty {
   display: flex;
-
   align-items: center;
   justify-content: center;
-
   color: var(--text-muted);
-
   font-family: var(--font-mono);
-
   font-size: 0.85rem;
 }
 
 .station-panel h2 {
   font-family: var(--font-display);
-
   font-weight: 600;
-
   font-size: 1.05rem;
-
   margin: 0 0 0.15rem;
-
   text-transform: uppercase;
-
   letter-spacing: 0.03em;
 }
 
 .coords {
   font-family: var(--font-mono);
-
   font-size: 0.75rem;
-
   color: var(--text-muted);
-
   margin: 0 0 1rem;
 }
 
 .station-panel-note {
   font-size: 0.75rem;
-
   color: var(--accent-signal);
-
   line-height: 1.4;
-
   margin: -0.5rem 0 1rem;
 }
 
@@ -444,102 +296,132 @@ body {
    ========================================================= */
 
 .variable-chart-list {
-  display: flex;
-
-  flex-direction: column;
-
-  gap: 1.1rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.1rem 1.25rem;
+  align-items: stretch;
 }
 
 .variable-chart {
+  min-width: 0;
   border-top: 1px solid var(--line-grid);
-
   padding-top: 0.75rem;
+}
+
+.variable-chart--full {
+  grid-column: 1 / -1;
+}
+
+.variable-chart-placeholder {
+  min-width: 0;
+  min-height: 100%;
+  border-top: 1px solid var(--line-grid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--line-grid);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+.variable-chart-grid {
+  stroke: var(--line-grid);
+  stroke-width: 1;
+  opacity: 0.65;
+}
+
+.variable-chart-axis-value {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  fill: var(--text-muted);
+}
+
+.variable-chart-direction-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  fill: var(--text-muted);
+}
+
+.variable-chart-direction-value {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+  fill: var(--text-chalk);
 }
 
 .variable-chart-label {
   display: flex;
-
   align-items: center;
-
   gap: 0.35rem;
-
   font-family: var(--font-display);
-
   font-weight: 600;
-
   font-size: 0.8rem;
-
   letter-spacing: 0.03em;
-
   text-transform: uppercase;
-
   color: var(--text-chalk);
-
   margin-bottom: 0.25rem;
 }
 
 .variable-chart-unit {
   font-family: var(--font-mono);
-
   font-weight: 400;
-
   text-transform: none;
-
   color: var(--text-muted);
-
   font-size: 0.7rem;
 }
 
 .variable-chart-svg {
   width: 100%;
   height: auto;
-
   display: block;
 }
 
 .variable-chart-baseline {
   stroke: var(--line-grid);
-
   stroke-width: 1;
 }
 
 .variable-chart-value {
   font-family: var(--font-mono);
-
   font-size: 10px;
-
   fill: var(--text-chalk);
 }
 
 .variable-chart-day {
   font-family: var(--font-mono);
-
   font-size: 9px;
-
   fill: var(--text-muted);
-
   letter-spacing: 0.03em;
 }
 
 .variable-chart-date {
   font-family: var(--font-mono);
-
   font-size: 9px;
-
   fill: var(--text-chalk);
 }
 
 .variable-chart--empty {
   color: var(--accent-signal);
-
   font-size: 0.75rem;
-
   line-height: 1.4;
 }
 
 .variable-chart--empty p {
   margin: 0.35rem 0 0;
+}
+
+/* --- Wind direction dial --- */
+
+.wind-dial-ring {
+  fill: none;
+  stroke: var(--line-grid);
+  stroke-width: 1;
+  opacity: 0.6;
+}
+
+.wind-dial-pivot {
+  fill: var(--bg-panel);
+  stroke-width: 1.2;
 }
 
 /* =========================================================
@@ -548,54 +430,33 @@ body {
 
 .variable-chart-unit-toggle {
   position: relative;
-
   display: grid;
-
   grid-template-columns: 1fr 1fr;
-
   align-items: center;
-
   width: 62px;
   height: 20px;
-
   margin-left: 0.15rem;
-
   padding: 2px;
-
   border: 1px solid var(--line-grid);
-
   border-radius: 10px;
-
   background: var(--bg-rail);
-
   cursor: pointer;
-
   vertical-align: middle;
-
   overflow: hidden;
-
   transition: border-color 0.18s ease;
 }
 
 .variable-chart-unit-toggle::before {
   content: "";
-
   position: absolute;
-
   z-index: 0;
-
   top: 2px;
   left: 2px;
-
   width: 28px;
   height: 14px;
-
   border-radius: 7px;
-
   background: var(--accent-brass);
-
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-
   transition: transform 0.2s ease;
 }
 
@@ -605,31 +466,20 @@ body {
 
 .unit-toggle-option {
   position: relative;
-
   z-index: 1;
-
   display: flex;
-
   align-items: center;
   justify-content: center;
-
   height: 100%;
-
   font-family: var(--font-mono);
-
   font-size: 0.58rem;
-
   line-height: 1;
-
   color: var(--text-muted);
-
   pointer-events: none;
 }
 
-.variable-chart-unit-toggle:not(.is-secondary)
-  .unit-toggle-option:first-child,
-.variable-chart-unit-toggle.is-secondary
-  .unit-toggle-option:last-child {
+.variable-chart-unit-toggle:not(.is-secondary) .unit-toggle-option:first-child,
+.variable-chart-unit-toggle.is-secondary .unit-toggle-option:last-child {
   color: var(--bg-rail);
 }
 
@@ -639,7 +489,6 @@ body {
 
 .variable-chart-unit-toggle:focus-visible {
   outline: 1px solid var(--accent-brass);
-
   outline-offset: 2px;
 }
 
@@ -651,91 +500,86 @@ body {
    Responsive
    ========================================================= */
 
+@media (max-width: 1000px) {
+  .view-body {
+    gap: 1rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  .variable-chart-list {
+    gap: 0.9rem 1rem;
+  }
+}
+
+/* =========================================================
+   Mobile — stack, natural page scroll
+   ========================================================= */
+
 @media (max-width: 720px) {
-  /*
-   * Mobile returns to normal document flow.
-   */
   .app {
-    height: auto;
-
-    min-height: 100vh;
-
-    overflow: visible;
-
     flex-direction: column;
   }
 
   .sidebar {
     flex: 0 0 auto;
-
     width: 100%;
-    height: auto;
-
     border-right: none;
-
     border-bottom: 1px solid var(--line-grid);
-  }
-
-  .app-main {
-    height: auto;
-
-    min-height: 0;
-
-    display: block;
-
-    overflow: visible;
   }
 
   .view-header {
     flex-direction: column;
-
     align-items: flex-start;
-
     gap: 0.25rem;
-
     padding: 1rem;
   }
 
   .view-body {
     width: 100%;
-
-    min-height: 0;
-
+    max-width: none;
+    margin: 0;
     flex-direction: column;
-
     align-items: stretch;
-
+    gap: 1rem;
     padding: 1rem;
-
-    overflow: visible;
   }
 
   .map-wrapper {
     width: 100%;
-
-    max-width: none;
-
     height: 60vh;
-
     min-height: 400px;
-
-    flex: none;
-  }
-
-  .leaflet-map {
-    width: 100%;
-    height: 100%;
   }
 
   .station-panel {
     width: 100%;
+    padding: 1rem;
+  }
 
-    max-width: none;
+  .variable-chart-list {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
 
-    height: auto;
+  .variable-chart-placeholder {
+    min-height: 100px;
+  }
+}
 
-    max-height: 70vh;
+/* =========================================================
+   Small mobile
+   ========================================================= */
 
-    overflow-y: auto;
+@media (max-width: 480px) {
+  .view-body {
+    padding: 0.75rem;
+  }
+
+  .station-panel {
+    padding: 0.85rem;
+  }
+
+  .variable-chart-label {
+    font-size: 0.75rem;
   }
 }

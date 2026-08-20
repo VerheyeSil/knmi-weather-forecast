@@ -1,16 +1,42 @@
-# React + Vite
+# KNMI Weather Forecast — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + Vite app for the [KNMI weather forecast project](../README.md). Displays a map of Dutch weather stations and a 7-day forecast panel (temperature, precipitation, wind) for the selected station.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev
+```
 
-## React Compiler
+Requires the backend API running at `http://127.0.0.1:8000` (see the root README). Override the API base URL with a `VITE_API_URL` environment variable if needed.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Structure
+src/
+├── App.jsx # shell: sidebar + active view
+├── api.js # fetch wrapper for the backend API
+├── styles.css # design tokens + all styling
+├── components/
+│ ├── Sidebar.jsx # collapsible left navigation
+│ ├── LeafletMap.jsx # dark-themed OSM map, stations as temperature-colored dots
+│ ├── StationPanel.jsx # per-station forecast: config-driven list of charts
+│ └── VariableChart.jsx # reusable chart (line / bar / wind-combo), no external chart library
+└── views/
+└── ForecastView.jsx # current tab: map + forecast panel
 
-## Expanding the Oxlint configuration
+## Adding a new sidebar tab
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+Add an entry to the `VIEWS` array in `App.jsx` (`available: true`) and create the corresponding file in `src/views/`. The sidebar and routing pick it up automatically.
+
+## Adding a new forecast variable
+
+Add an entry to the `VARIABLES` array in `StationPanel.jsx` — label, unit, color, chart `type` (`"line"`, `"bar"`, or `"wind-combo"`), and which API field(s) to read. No changes needed in `VariableChart.jsx` unless the new variable needs a genuinely new visualization type.
+
+## Design
+
+Dark "synoptic chart / instrument panel" aesthetic — grounded in meteorological chart conventions rather than a generic dashboard template. Palette and type scale are defined as CSS custom properties at the top of `styles.css`:
+
+- **Colors**: North Sea slate (background), instrument brass (temperature/primary accent), water-teal (precipitation), signal red (warnings), muted blue-grey (secondary text)
+- **Type**: Space Grotesk (headings), Inter (body), IBM Plex Mono (all numeric data — coordinates, values, cache age)
+
+No charting library — all charts (`VariableChart.jsx`) are hand-built SVG, kept intentionally simple and reusable across variables.
